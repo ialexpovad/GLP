@@ -6,14 +6,14 @@ This is library provides a pre-build custom application with framework PyQt5.
 
 
 ## Automatic
-Go to the releases section of this repository and download the package for yourself.
+Go to the [releases section](https://github.com/ialexpovod/GLP/releases)  of this repository and download the package for yourself.
 
 ## Manual
 
 ## Contributing 
 
 ## License
-GLP is available under MIT License. See the LICENSE file for more information.
+GLP is available under MIT License. See the [LICENSE](https://github.com/ialexpovod/GLP/blob/main/LICENSE) file for more information.
 
 
 
