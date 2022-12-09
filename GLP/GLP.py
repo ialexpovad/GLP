@@ -366,14 +366,33 @@ class QCustomTopBarWidget(QWidget):
         self.custCloseBtn.setToolTip("End the session")
 
         self.RedHighlightPalette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(139, 0, 0))  # Dark Red
-        brush.setStyle(QtCore.Qt.SolidPattern)
+        darkRedBrush = QtGui.QBrush(QtGui.QColor(139, 0, 0))  # Dark Red
+        darkRedBrush.setStyle(QtCore.Qt.SolidPattern)
         
-        self.RedHighlightPalette.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.SolidPattern)
+        self.RedHighlightPalette.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkRedBrush)
+        darkRedBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        darkRedBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.RedHighlightPalette.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkRedBrush)
+
         
-        self.RedHighlightPalette.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, brush)
+        self.BlueHighLightPallete = QtGui.QPalette()
+        darkBlueBrush = QtGui.QBrush(QtGui.QColor(0,0,139))
+        darkBlueBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.BlueHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkBlueBrush)
+        darkBlueBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        darkBlueBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.BlueHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkBlueBrush)
+
+        self.GreenHighLightPallete = QtGui.QPalette()
+        darkGreenBrush = QtGui.QBrush(QtGui.QColor(21,71,52))
+        darkGreenBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.GreenHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkGreenBrush)
+        darkGreenBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        darkGreenBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.GreenHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkGreenBrush)
+
+        
+
         
         self.custCloseBtn.installEventFilter(self)
         self.custCloseBtn.setAutoRaise(True)
@@ -532,13 +551,17 @@ class QCustomTopBarWidget(QWidget):
             elif a0 == self.custMaxBtn:
                 if a1.type() == QtCore.QEvent.Enter:
                     self.custMaxBtn.setAutoRaise(False)
+                    self.custMaxBtn.setPalette(self.BlueHighLightPallete)
                 elif a1.type() == QtCore.QEvent.Leave:
                     self.custMaxBtn.setAutoRaise(True)
+                    self.custMaxBtn.setPalette(self.palette())
             elif a0 == self.custMinBtn:
                 if a1.type() == QtCore.QEvent.Enter:
                     self.custMinBtn.setAutoRaise(False)
+                    self.custMinBtn.setPalette(self.GreenHighLightPallete)
                 elif a1.type() == QtCore.QEvent.Leave:
                     self.custMinBtn.setAutoRaise(True)
+                    self.custMinBtn.setPalette(self.palette())
         # elif self._includeErrorButton and a0 is self.error_notification and a1.type() == QtCore.QEvent.Enter:
         #     QToolTip.showText(QtGui.QCursor.pos(), self.error_notification.toolTip(), self.error_notification)
         return super(QCustomTopBarWidget, self).eventFilter(a0, a1)
