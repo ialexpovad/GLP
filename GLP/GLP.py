@@ -366,7 +366,7 @@ class QCustomTopBarWidget(QWidget):
         self.custCloseBtn.setToolTip("End the session")
 
         self.RedHighlightPalette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(155, 0, 0))  # Dark Red
+        brush = QtGui.QBrush(QtGui.QColor(139, 0, 0))  # Dark Red
         brush.setStyle(QtCore.Qt.SolidPattern)
         
         self.RedHighlightPalette.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, brush)
@@ -521,7 +521,9 @@ class QCustomTopBarWidget(QWidget):
         self.window().showMinimized() # that's all
 
     def eventFilter(self, a0, a1) -> bool:
-        if a1.type() == 10 or a1.type() == 11:
+        # http://qtdocs.narod.ru/4.1.0/doc/html/qevent.html
+        if a1.type() == 10 or a1.type() == 11: # 11 - The mouse pointer leaves the widget area.
+                                               # 10 - The mouse pointer enters the widget area.     
             if a0 == self.custCloseBtn:
                 if a1.type() == QtCore.QEvent.Enter: # HoverMove
                     self.custCloseBtn.setPalette(self.RedHighlightPalette)
