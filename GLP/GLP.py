@@ -25,7 +25,11 @@ from PyQt5.QtWidgets import (   QApplication,
                                 QMenuBar,
                                 QGridLayout,
                                 QToolButton,
-                                QSizePolicy
+                                QSizePolicy, 
+                                QLabel,
+                                QSpinBox,
+                                QPushButton,
+                                QFrame
                                 )
 from PyQt5 import Qt
 from PyQt5 import QtCore
@@ -39,7 +43,7 @@ except ModuleNotFoundError:
     import GLP
 
 
-common_exceptions = (
+exceptions = (
                         TypeError , 
                         SyntaxError , 
                         sympy.SympifyError , 
@@ -53,40 +57,44 @@ common_exceptions = (
                         ImportError
                         )
 
-def ExceptionOutput(exc_info = None, extraInfo = True):
-    """
-    Console output for exceptions\n
-    Use in `except:`: Error = ExceptionOutput(sys.exc_info())\n
-    Prints Time, ExceptionType, Filename+Line and (if extraInfo in not False) the exception description to the console\n
-    Returns a string
-    """
+def exception(exc = None, _exinf = True):
+    '''
+    Console output for exceptions
+    ...except: error = exception(sys.exc_info())
+    ...
+    Parrse: Prints Time, type of exception, Filename + Line and (if extraInfo in not False) the exception description to the console\n
+    return: string
+    '''
     try:
         if False:
-            if exc_info == None:
-                exc_info = True
-            return NC(exc=exc_info)
+            if exc == None:
+                exc = True
+            return natinification(_exc = exc) # TODO: add natification
         else:
-            print(cTimeSStr(),":")
-            if exc_info==None:
+            if exc == None:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
             else:
-                exc_type, exc_obj, exc_tb = exc_info
-            fName = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-            if extraInfo:
-                print(exc_type, " in", fName, " line", exc_tb.tb_lineno ,": ", exc_obj)
+                exc_type, exc_obj, exc_tb = exc
+            file_name = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            if _exinf:
+                # print(cTimeSStr(),":") # Returns the time (including seconds) as a string: %H:%M:%S
+                print(str(datetime.datetime.now().strftime('%H:%M:%S'))
+                             + ":", exc_type, "in", file_name, " line", exc_tb.tb_lineno,":", exc_obj)
             else:
-                print(exc_type, " in", fName, " line", exc_tb.tb_lineno)
-            return str(exc_type)+": "+str(exc_obj)
-    except common_exceptions as inst:
+                print(str(datetime.datetime.now().strftime('%H:%M:%S'))
+                             + ':', exc_type, " in", file_name, " line", exc_tb.tb_lineno)
+            return str(exc_type) + ": " + str(exc_obj)
+    except exceptions as inst:
         print("An exception occurred while trying to print an exception!")
         print(inst)
 
 
-def cTimeSStr():
-    """
-    Returns the time (including seconds) as a string: %H:%M:%S
-    """
-    return str(datetime.datetime.now().strftime('%H:%M:%S'))
+def advancedMode() -> bool:
+    '''
+    TODO: adding description
+    '''
+    return QApplication.instance().admode
+
 
 
 def App() -> QApplication:
@@ -109,13 +117,15 @@ class GLPMainApp(QApplication):
         # TODO: check whether the advanced mode is active
         # sys.excepthook =
 
-
-
         # Greeting user in Tab Widget 
         try:
-            message = "Welcome " + getpass.getuser()
+            message = "Welcome to" + getpass.getuser()
         except: # TODO: adding exception for no-user
             message = "Welcome"
+        self.lastMessageText = message
+        self.lastMessageToolTip = message
+        self.lastMessageIcon = QtGui.QIcon()
+
 
         self.moduleVersion = "Python %s\n GLP %s " % (" %d.%d" % (sys.version_info.major, sys.version_info.minor),
                                                         version
@@ -126,6 +136,8 @@ class GLPMainApp(QApplication):
         self.AppPalettes = {}
         self.colourSheme()
 
+        self.admode = False
+
     def setMainWindow(self, win):
         self.MainWindow = win
 
@@ -133,6 +145,7 @@ class GLPMainApp(QApplication):
         self.defFont = QtGui.QFont()
         self.defFont.setFamily("Helvetica [Cronyx]")
         self.defFont.setPointSize(9)
+        # self.defFont.setBold(True)
         self.setFont(self.defFont)
     
     def colourSheme(self, colour = "Light"):
@@ -200,6 +213,12 @@ class GLPMainApp(QApplication):
             
         # self.r_Recolour()
         self.S_ColourChanged.emit()
+    def popUpWindowNotinification(self):
+        '''
+        
+        '''
+        print('Pressed!')
+
 
 class colourDict(dict):
     """
@@ -240,12 +259,12 @@ class MplWidget(QWidget):
             self.canvas.fig.set_edgecolor(self.background_Colour)
             self.canvas.ax.set_facecolor(self.background_Colour)
             self.canvas.ax.set_prop_cycle(self.Cycler)
-        except common_exceptions:
-            ExceptionOutput(sys.exc_info())
+        except exceptions:
+            exception(sys.exc_info())
         try:
             self.canvas.draw()
-        except common_exceptions:
-            ExceptionOutput(sys.exc_info())
+        except exceptions:
+            exception(sys.exc_info())
 
 class GLPWindow(QMainWindow):
     def __init__(   self, parent: typing.Optional[QWidget] = None, flags: typing.Union[QtCore.Qt.WindowFlags, QtCore.Qt.WindowType] = None,
@@ -263,6 +282,19 @@ class GLPWindow(QMainWindow):
 
             # TODO: set top bar on menu bar ...
 
+        self.GPLWidget = customQFrameWidget(self)
+        self.gridLayGPLWidget =  QGridLayout(self.GPLWidget)
+        self.gridLayGPLWidget.setContentsMargins(0, 0, 0, 0)
+        self.gridLayGPLWidget.setSpacing(0)
+        self.gridLayGPLWidget.setObjectName("gridLayout")
+        self.GPLWidget.setLayout(self.gridLayGPLWidget)
+        
+        self.centrWindowWidget = QMainWindow(self)
+        self.gridLayGPLWidget.addWidget(self.centrWindowWidget,1,0)
+        super(GLPWindow, self).setCentralWidget(self.GPLWidget)
+
+        self.installEventFilter(self)
+
 
 class QCustomMenuBar(QMenuBar):
     '''
@@ -273,6 +305,7 @@ class QCustomMenuBar(QMenuBar):
         self.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor)) # applies cursor 'Hand'
 
 class QCustomTopBarWidget(QWidget):
+
     '''
     Custom top bar.
     '''
@@ -295,18 +328,19 @@ class QCustomTopBarWidget(QWidget):
         self.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor)) # applies cursor 'Hand'
 
         if doInitialize:
-            self.initialize()
+            self.initialize(_includeMenu, _includeFontSpinBox, _includeErrorButton, _includeAdCB)
         
-    def initialize(self, _includeMenu = False, 
-                        _includeFontSpinBox = False,
-                    _includeErrorButton = False,
-                    _includeAdCB = False
+    def initialize(self, _includeMenu           = False, 
+                         _includeFontSpinBox    = False,
+                         _includeErrorButton    = False,
+                         _includeAdCB           = False
                     ):
-        self._includeMenu = _includeMenu
-        self._includeFontSpinBox= _includeFontSpinBox
-        self._includeAdCB = _includeAdCB
-        self._includeErrorButton = _includeErrorButton
-        self.setObjectName("TopBarWidget")
+        self._includeMenu           = _includeMenu
+        self._includeFontSpinBox    = _includeFontSpinBox
+        self._includeAdCB           = _includeAdCB
+        self._includeErrorButton    = _includeErrorButton
+        self.setObjectName("QCustomTopBarWidget")
+
         if self.layout() == None:
             self.gridLayout = QGridLayout(self)
             self.gridLayout.setContentsMargins(0, 0, 0, 0)
@@ -327,8 +361,8 @@ class QCustomTopBarWidget(QWidget):
                                     )
           
                          
-        self.custCloseBtn.setFont( QtGui.QFont("Arial",weight=QtGui.QFont.Bold))
-        self.custCloseBtn.setText("×")
+        self.custCloseBtn.setFont( QtGui.QFont("Arial", weight = QtGui.QFont.Bold))
+        self.custCloseBtn.setText("x")
         self.custCloseBtn.setToolTip("End the session")
 
         self.RedHighlightPalette = QtGui.QPalette()
@@ -363,8 +397,8 @@ class QCustomTopBarWidget(QWidget):
                                     QtCore.Qt.AlignRight
                                     )
         self.custMaxBtn.setFont( QtGui.QFont("Arial",weight=QtGui.QFont.Bold))
-        self.custMaxBtn.setText(u"🗖")
-        self.custMaxBtn.clicked.connect(self._toggleMinMax)
+        self.custMaxBtn.setText(u"□") # TODO:add picture 
+        self.custMaxBtn.clicked.connect(self._toggleMaximized)
         # endregion
 
         # region "Minimize"
@@ -379,7 +413,8 @@ class QCustomTopBarWidget(QWidget):
                                     QtCore.Qt.AlignRight
                                     )
         self.custMinBtn.setFont( QtGui.QFont("Arial",weight=QtGui.QFont.Bold))
-        self.custMinBtn.setText("_")
+        self.custMinBtn.setText("_") # TODO:add picture 
+        self.custMinBtn.clicked.connect(self._toggleMinimized)
         # endregion
          
           
@@ -387,29 +422,77 @@ class QCustomTopBarWidget(QWidget):
         self.settingsBtn = QToolButton(self)
         self.settingsBtn.setObjectName("OptionsButton")
         self.layout().addWidget(self.settingsBtn, 0, 105, 1, 1, QtCore.Qt.AlignRight)
-        self.settingsBtn.setText("⚙")
+        self.settingsBtn.setText(u"⚙️") # TODO:add picture 
         self.settingsBtn.setToolTip("Open settings")
         self.settingsBtn.installEventFilter(self)
         self.settingsBtn.setAutoRaise(True)
         self.settingsBtn.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
+        # -> slot by clicked
+        # self.settingsBtn.clicked.connect(app().showSettings) # TODO: add method opening settings app
 
+
+        self.moveHand = QLabel(self)
+        self.moveHand.setObjectName("moveHand")
+        self.layout().addWidget(self.moveHand, 0, 104, 1, 1,QtCore.Qt.AlignRight)
+        self.moveHand.setToolTip("Move")
+        self.moveHand.setText(u"👆")
+        self.moveHand.setCursor(QtGui.QCursor(QtCore.Qt.OpenHandCursor))
+        try:
+            #self.window().menuBar().installEventFilter(self)
+            if self._includeMenu:
+                self.Menu = QToolButton(self)
+                self.Menu.setObjectName("Menu")
+                self.layout().addWidget(self.Menu, 0, 103, 1, 1,QtCore.Qt.AlignRight)
+                self.Menu.setText(u"\u2630")
+                self.Menu.setAutoRaise(True)
+                self.Menu.setPopupMode(QToolButton.InstantPopup)
+                self.Menu.setMenu(self.window().Menu)
+                self.Menu.setSizePolicy(self.ButtonSizePolicy)
+        except exceptions:
+            exception(sys.exc_info())
+
+        if self._includeFontSpinBox:
+            self.fontSpinBox = QSpinBox(self)
+            self.fontSpinBox.setObjectName("fontSpinBox")
+            self.fontSpinBox.setMinimum(9)
+            self.fontSpinBox.setMaximum(14)
+
+            self.fontSpinBox.setProperty("value", self.font().pointSize())
+            self.layout().addWidget(self.fontSpinBox, 0, 102, 1, 1,QtCore.Qt.AlignRight)
+            self.fontSpinBox.valueChanged.connect(self.changedSizeOfFont)
+
+        if _includeErrorButton:
+            self.error_notification = QPushButton(self)
+            self.error_notification.setObjectName("error_notification")
+            self.error_notification.setText(QApplication.instance().lastMessageText)
+            self.error_notification.setToolTip(QApplication.instance().lastMessageToolTip)
+            self.error_notification.setIcon(QApplication.instance().lastMessageIcon)
+            
+            self.layout().addWidget(self.error_notification, 0, 101, 1, 1, QtCore.Qt.AlignRight)
+            self.error_notification.installEventFilter(self)
+            self.error_notification.clicked.connect(QApplication.instance().popUpWindowNotinification)
+
+        # if self._includeAdCB:
+        #     pass
+
+        self.moving = False
 
     def _toggleExit(self):
         print("Close window...")
         self.window().close()
 
 
-    def _toggleMinMax(self):
+    def _toggleMaximized(self):
         """
         Seted icons for buttons "maximize" and "minimize" in depened of size.
         """
-        #  ⇳⇖⇗⇘⇙⇕⇔↔↕↖↗↘↙ 
+        #  ⇳⇖⇗⇘⇙⇕⇔↔↕↖↗↘↙
         # ⇱⇲
         if not self.window().isFullScreen(): # If not window opening in full screen 
                                              # icon maximization by default - u"\U0001F5D6"
             if self.window().isMaximized():
                 self.window().showNormal()
-                self.custMaxBtn.setText(u"🗖") # 🗖
+                self.custMaxBtn.setText(u"□") # 🗖
             else:
                 self.window().setGeometry(
                                             Qt.QStyle.alignedRect(
@@ -418,22 +501,172 @@ class QCustomTopBarWidget(QWidget):
                                                 self.window().size(),
                                                 QApplication.instance().desktop().availableGeometry(self.window())))
                 self.window().showMaximized()
-                self.custMaxBtn.setText(u"🗖")
+                self.custMaxBtn.setText(u"□")
         else:
             try:
                 if self.window().LastOpenState == self.window().showMaximized:
-                    self.custMaxBtn.setText(u"🗖")
+                    self.custMaxBtn.setText(u"□")
                 else:
-                    self.custMaxBtn.setText(u"🗖")
+                    self.custMaxBtn.setText(u"□")
                 self.window().LastOpenState()
             except AttributeError:
-                self.custMaxBtn.setText(u"🗖")
+                self.custMaxBtn.setText(u"□")
                 self.window().showMaximized()
 
 
+    def _toggleMinimized(self): 
+        '''
+        Slot minimized window.
+        '''
+        self.window().showMinimized() # that's all
 
+    def eventFilter(self, a0, a1) -> bool:
+        if a1.type() == 10 or a1.type() == 11:
+            if a0 == self.custCloseBtn:
+                if a1.type() == QtCore.QEvent.Enter: # HoverMove
+                    self.custCloseBtn.setPalette(self.RedHighlightPalette)
+                elif a1.type() == QtCore.QEvent.Leave: # HoverLeave
+                    self.custCloseBtn.setPalette(self.palette())
+            elif a0 == self.custMaxBtn:
+                if a1.type() == QtCore.QEvent.Enter:
+                    self.custMaxBtn.setAutoRaise(False)
+                elif a1.type() == QtCore.QEvent.Leave:
+                    self.custMaxBtn.setAutoRaise(True)
+            elif a0 == self.custMinBtn:
+                if a1.type() == QtCore.QEvent.Enter:
+                    self.custMinBtn.setAutoRaise(False)
+                elif a1.type() == QtCore.QEvent.Leave:
+                    self.custMinBtn.setAutoRaise(True)
+        # elif self._includeErrorButton and a0 is self.error_notification and a1.type() == QtCore.QEvent.Enter:
+        #     QToolTip.showText(QtGui.QCursor.pos(), self.error_notification.toolTip(), self.error_notification)
+        return super(QCustomTopBarWidget, self).eventFilter(a0, a1)
 
+    def changedSizeOfFont(self):
+        '''
+        Changing size of font
+        '''
+        
+        try:
+            QApplication.instance().SetFont(PointSize = self.fontSpinBox.value(), 
+                                            source = self.window())
+        except exceptions:
+            exception(sys.exc_info())
 
+    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+        if a0.button() == QtCore.Qt.LeftButton:
+            self.setCursor(QtGui.QCursor(QtCore.Qt.ClosedHandCursor))
+            self.moveHand.setCursor(QtGui.QCursor(QtCore.Qt.ClosedHandCursor))
+            self.moving = True; self.offset = a0.globalPos() - self.window().geometry().topLeft()
+        return super().mousePressEvent(a0)
 
+    def mouseReleaseEvent(self, a0: QtGui.QMouseEvent) -> None:
+        self.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.moveHand.setCursor(QtGui.QCursor(QtCore.Qt.OpenHandCursor))
+        if a0.button() == QtCore.Qt.LeftButton:
+            pos = self.window().pos()
+            #if (pos.x() < 0):
+            #    pos.setX(0)
+            #    self.window().move(pos)
+            if (pos.y() < 0):
+                pos.setY(0)
+                self.window().move(pos)
+            # If the mouse is in a corner or on a side let the window fill this corner or side of the screen
+            try:
+                Tolerance = 5
+                eventPos = a0.globalPos()
+                screenNumber = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
+                screen = QApplication.desktop().availableGeometry(screenNumber)
+                Half_X = (screen.bottomRight().x()-screen.topLeft().x())/2+1
+                Full_X = (screen.bottomRight().x()-screen.topLeft().x())+1
+                Half_Y = (screen.bottomRight().y()-screen.topLeft().y())/2+1
+                Full_Y = (screen.bottomRight().y()-screen.topLeft().y())+1
+                BottomMax = screen.bottomLeft().y()
+                RightMax = screen.bottomRight().x()
+                TopMax = screen.topLeft().y()
+                LeftMax = screen.topLeft().x()
+                #if (pos.y() > BottomMax): # If Bottom Side gets removed this must be turned on to make it impossible for the window to get lost behind the task bar
+                #    pos.setY(BottomMax-50)
+                #    self.window().move(pos)
+                # Top Left
+                if eventPos.x() <= Tolerance + LeftMax and eventPos.y() <= Tolerance + TopMax:
+                    self.window().resize(Half_X, Half_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveTopLeft(screen.topLeft())
+                    self.window().move(frameGm.topLeft())
+                # Bottom Left
+                elif eventPos.x() <= Tolerance + LeftMax and eventPos.y() >= BottomMax-Tolerance:
+                    self.window().resize(Half_X, Half_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveBottomLeft(screen.bottomLeft())
+                    self.window().move(frameGm.topLeft())
+                # Top Right
+                elif eventPos.x() >= RightMax-Tolerance and eventPos.y() <= Tolerance + TopMax:
+                    self.window().resize(Half_X, Half_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveTopRight(screen.topRight())
+                    self.window().move(frameGm.topLeft())
+                # Bottom Right
+                elif eventPos.x() >= RightMax-Tolerance and eventPos.y() >= BottomMax-Tolerance:
+                    self.window().resize(Half_X, Half_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveBottomRight(screen.bottomRight())
+                    self.window().move(frameGm.topLeft())
+                # Left Side
+                elif eventPos.x() <= Tolerance + LeftMax:
+                    self.window().resize(Half_X, Full_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveTopLeft(screen.topLeft())
+                    self.window().move(frameGm.topLeft())
+                # Right Side
+                elif eventPos.x() >= RightMax-Tolerance:
+                    self.window().resize(Half_X, Full_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveTopRight(screen.topRight())
+                    self.window().move(frameGm.topLeft())
+                # Top Side
+                elif eventPos.y() <= Tolerance + TopMax:
+                    if advancedMode(): # MAYBE: Make this behaviour for advanced mode toggable in the options if a user never wants this
+                        self.window().resize(Full_X, Half_Y)
+                        frameGm = self.window().frameGeometry()
+                        frameGm.moveTopRight(screen.topRight())
+                        self.window().move(frameGm.topLeft())
+                    else:
+                        self.window().showMaximized()
+                # Bottom Side
+                elif eventPos.y() >= BottomMax-Tolerance:
+                    self.window().resize(Full_X, Half_Y)
+                    frameGm = self.window().frameGeometry()
+                    frameGm.moveBottomLeft(screen.bottomLeft())
+                    self.window().move(frameGm.topLeft())
+            except exceptions:
+                pass # TODO: Add notification
+        return super().mouseReleaseEvent(a0)
 
+    def mouseMoveEvent(self, a0: QtGui.QMouseEvent) -> None:
+        if self.moving:
+            if (self.window().isMaximized() or self.window().isFullScreen()): # If moving the window while in fullscreen or maximized make it normal first
+                # TODO: Make normalizing the window relative to the previous and current window width to keep the cursor on the window regardless wether clicking right or left
+                self.custMaxBtn.setText("□")
+                corPos = self.window().geometry().topRight()
+                self.window().showNormal()
+                self.window().GPLWidget.inFrame() # TODO: fix
+                QApplication.instance().processEvents()
+                self.window().move(corPos - self.window().geometry().topRight()+self.window().geometry().topLeft())
+                self.offset = a0.globalPos() - self.window().geometry().topLeft()
+            self.window().move(a0.globalPos() - self.offset)
+        return super().mouseMoveEvent(a0)
 
+class customQFrameWidget(QFrame):
+    '''
+    TODO: add description
+    '''
+    def __init__(self, parent: typing.Optional[QWidget] = None, 
+                flags: typing.Union[QtCore.Qt.WindowFlags, QtCore.Qt.WindowType] = None) -> None:
+        super(customQFrameWidget, self).__init__(parent)
+        self.enabledFrame = False
+
+    def inFrame(self):
+        self.enabledFrame = True
+        self.setFrameStyle(self.Box | self.Sunken)
+        self.setLineWidth(2)
+        #self.setMidLineWidth(3)
