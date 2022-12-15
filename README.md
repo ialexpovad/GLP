@@ -1,4 +1,4 @@
-# GLP - General Library of Povod Alex
+# GLP - General Library of Pre-Build QApplication
 
 This is library provides a pre-build custom application with framework PyQt5.
 
