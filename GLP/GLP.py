@@ -20,7 +20,7 @@ import matplotlib
 import numpy
 
 # Importing PyQt mudules
-from PyQt5.QtWidgets import (   QApplication, 
+from PyQt5.QtWidgets import (QApplication, 
                                 QMainWindow, 
                                 QWidget, 
                                 QStyle, 
@@ -37,8 +37,7 @@ from PyQt5.QtWidgets import (   QApplication,
                                 QAbstractItemView,
                                 QListWidget,
                                 QListWidgetItem,
-                                QStatusBar
-                                )
+                                QStatusBar)
 from PyQt5 import Qt
 from PyQt5 import QtCore
 from PyQt5 import QtGui
@@ -77,7 +76,7 @@ def exception(exc = None, _exinf = True):
         if False:
             if exc == None:
                 exc = True
-            return NC(_exc = exc) # TODO: add natification
+            return Notification(_exc = exc) # TODO: add natification
         else:
             if exc == None:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -165,7 +164,7 @@ class GLPMainApp(QApplication):
             try:
                 importlib.reload(theme)
             except:
-                NC(2,"Could not reload AGeColour",exc=sys.exc_info(),
+                Notification(2,"Could not reload AGeColour",exc=sys.exc_info(),
                     func="Main_App.Recolour",input=str(colour))
             try:    
                 spec = importlib.util.spec_from_file_location(  "CustomColourPalettes", 
@@ -175,7 +174,7 @@ class GLPMainApp(QApplication):
                 CustomColours = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(CustomColours)
             except:
-                NC(4,"Could not load custom colours",exc=sys.exc_info(),
+                Notification(4,"Could not load custom colours",exc=sys.exc_info(),
                     func="Main_App.Recolour",input=str(colour))
             try:
                 self._reColourSheme(*theme.Colours[colour]())
@@ -223,10 +222,6 @@ class GLPMainApp(QApplication):
         self.S_ColourChanged.emit()
     
     def popUpWindowNotinification(self):
-        """
-        Default access: pressing the notification button
-        Shows a window that lists all notifications and displays their details.
-        """
         if self.winNotif == None:
             self.winNotif = windowNotification()# TODO: create subclass by QMainWindow 
         self.winNotif.show()
@@ -235,53 +230,8 @@ class GLPMainApp(QApplication):
         self.processEvents()
         self.winNotif.activateWindow()
 
-class NC: # Notification Class
-    """
-    This is the basic notification class of AGeLib.  \n
-    All notifications are stored and accessible via the Notification Window which is opened by pressing on Notification button of any (AWWF) window.   \n
-    Notifications are used to communicate with the user and can be used for exception handling as they provide space for an entire bug report.   \n
-    They contain the version number of all modules that are in MainApp.ModuleVersions and can extract all information from exceptions.   \n
-    There are various levels of notifications: lvl: 0 = Nothing , 1 = Error , 2 = Warning , 3 = Notification , 4 = Advanced Mode Notification , 10 = Direct Notification  \n
-    The notification sends itself automatically. If you want to modify the notification before it is send set ``send=False`` and call ``.send()`` after the modifications are done  \n
-    The creation is very flexible. Here are a few examples:   \n
-    ```python
-    NC(10,"This message is directly displayed in the top bar and should be held very short and not contain any linebreaks (a single linebreak is ok in spacial cases)")
-    NC("This creates a normal notification")
-    NC(2,"This creates a warning")
-    NC((2,"A tuple with level and message is also acceptable"))
-    NC("This generates an error notification with the last caught exception",exc = sys.exc_info())
-    NC("This notification includes the callstack",tb=True)
-    ```
-    Even this is valid: ``NC()`` (Though not recommended)   \n
-    ``lvl=0`` can be useful if you want to create a notification in a function (with ``Notification = NC(lvl=0,send=False)``), fill it with information dynamically and return it for the caller.
-    The caller can then send the Notification. If ``lvl=0`` the MainApp will ignore the notification thus the caller does not need to care whether the function actually had anything to notify the user about.   \n
-    If you want to notify the user about exceptions ``exc`` should be ``True`` or ``sys.exc_info()``. If the exception should be logged but is usually not important set ``lvl=4``.
-    If the exception is not critical but should be noted as it might lead to unwanted behaviour set ``lvl=2`` to warn the user.
-    Exception notifications should set ``msg`` to give a short description that a regular user can understand (for example ``msg="The input could not be interpreted."`` or ``msg="Could not connect to the website."``).
-    It is also useful to set ``input`` to log the input that lead to the error. This should also include any settings that were used.   \n
-    Only ``lvl=int``,``time=datetime.datetime.now()``,``send=bool`` and ``exc=True or sys.exc_info()`` need a specific data type.
-    Everything else will be stored (msg will be converted into a string before storing). The access methods will return a string (and cast all input to a string before saving)
-    but the variables can still be accessed directly with the data type that was given to the init.  \n
-    Please note that ``err`` and ``tb`` are ignored when ``exc != None`` as they will be extracted from the exception.  \n
-    ``tb`` should be a string containing the callstack or ``True`` to generate a callstack
-    """
-    def __init__(self, lvl=None, msg=None, time=None, input=None, err=None, tb=None, exc=None, win=None, func=None, DplStr=None, send=True):
-        """
-        Creates a new notification object  \n
-        The creation is very flexible. Here are a few examples:   \n
-        ```python
-        NC(10,"This message is directly displayed in the top bar and should be held short and without linebreaks")
-        NC("This creates a normal notification")
-        NC(2,"This creates a warning")
-        NC((2,"A tuple with level and message is also acceptable"))
-        NC("This generates an error notification with the last caught exception",exc = sys.exc_info())
-        NC("This notification includes the callstack",tb=True)
-        ```
-        lvl: 0 = Nothing , 1 = Error , 2 = Warning , 3 = Notification , 4 = Advanced Mode Notification , 10 = Direct Notification  \n
-        ``exc = True`` or ``sys.exc_info()``   \n
-        ``tb`` should be a string containing the callstack or ``True`` to generate a callstack
-        """
-        self._time_time = timetime()
+class Notification: # Base Notification Class
+    def __init__(self, lvl = None, msg=None, time=None, input=None, err=None, tb=None, exc=None, win=None, func=None, DplStr=None, send=True):
         self._init_Values()
         self._was_send = False
         try:
@@ -305,7 +255,7 @@ class NC: # Notification Class
                 else:
                     self.level = 1 if lvl == None else lvl
                     self.Message = str(msg) if msg!=None else None
-                self.ErrorTraceback = str(self.exc_type)+"  in "+str(fName)+"  line "+str(self.exc_tb.tb_lineno)+"\n\n"+str(traceback.format_exc())#[:-1]) # TODO: Use traceback.format_exc() to get full traceback or something like traceback.extract_stack()[:-1] ([:-1] removes the NC.__init__())
+                self.ErrorTraceback = str(self.exc_type)+"  in "+str(fName)+"  line "+str(self.exc_tb.tb_lineno)+"\n\n"+str(traceback.format_exc())#[:-1]) # TODO: Use traceback.format_exc() to get full traceback or something like traceback.extract_stack()[:-1] ([:-1] removes the Notification.__init__())
                 print(self.Time,":")
                 if len(str(self.exc_obj))<150:
                     self.Error = str(self.exc_type)+": "+str(self.exc_obj)
@@ -364,7 +314,7 @@ class NC: # Notification Class
         self.itemDict = {"Time:\n":self.Time,"Level: ":self.Level,"Message:\n":self.Message,
                         "Error:\n":self.Error,"Error Description:\n":self.ErrorLongDesc,"Error Traceback:\n":self.ErrorTraceback,
                         "Function:\n":self.Function,"Window:\n":self.Window,"Input:\n":self.Input}
-  #---------- send, print ----------#
+
     def send(self,force=False):
         """
         Displays this notification (This method is thread save but this object should not be modified after using send)   \n
@@ -379,10 +329,10 @@ class NC: # Notification Class
         print("\n",self.Level, "at",self.Time,"\nMessage:",self.Message)
         if self.Error != None:
             print("Error:",self.Error,"Traceback:",self.ErrorTraceback,"\n")
-  #---------- items, unpack ----------#
+
     def items(self):
         """
-        Returns self.itemDict.items()   \n
+        Returns self.itemDict.items() \n
         self.itemDict contains all relevant data about this notification.  \n
         Please note that not all values are strings and should be converted before diplaying them.
         This allows ``if v!=None:`` to filter out all empty entries.    \n
@@ -397,7 +347,7 @@ class NC: # Notification Class
     def unpack(self): #CLEANUP: remove unpack
         """DEPRECATED: Returns a tuple ``(int(level),str(Message),str(Time))``"""
         return (self.level, str(self.Message), self.Time)
-  #---------- access variables ----------#
+
     def l(self, level=None):
         """
         Returns int(level)  \n
@@ -509,7 +459,7 @@ class NC: # Notification Class
         if input != None:
             self.Input = str(input)
         return str(self.Input)
-  #---------- GenerateLevelName ----------#
+
     def GenerateLevelName(self):
         """
         Generates str(self.Level) from int(self.level)
@@ -575,7 +525,6 @@ class NotificationEvent(QtCore.QEvent):
     def __init__(self, N):
         QtCore.QEvent.__init__(self, NotificationEvent.EVENT_TYPE)
         self.N = N
-
 
 class colourDict(dict):
     """
@@ -676,8 +625,6 @@ class GLPWindow(QMainWindow):
         self.doHideBar = False
         self.standardSize = (600, 300)
 
-        
-        
     def show(self):
         self.setTopBarVisible(True)
         super(GLPWindow, self).show()
@@ -833,7 +780,7 @@ class QCustomMenuBar(QMenuBar):
                     frameGm.moveBottomLeft(screen.bottomLeft())
                     self.window().move(frameGm.topLeft())
             except exceptions:
-                NC( exc=sys.exc_info(),
+                Notification( exc=sys.exc_info(),
                     win=self.window().windowTitle(),
                     func="QCustomMenuBar.mouseReleaseEvent")
         else:
@@ -1345,7 +1292,7 @@ class NotificationsWidget(QSplitter):
             text = "Could not add notification: "+Error
             item = QListWidgetItem()
             item.setText(text)
-            item.setData(100, NC(1,"Could not add notification",err=Error,func=str(self.objectName())+".(NotificationsWidget).AddNotification",win=self.window().windowTitle()))
+            item.setData(100, Notification(1,"Could not add notification",err=Error,func=str(self.objectName())+".(NotificationsWidget).AddNotification",win=self.window().windowTitle()))
             
             self.NotificationList.addItem(item)
             self.NotificationList.scrollToBottom()
@@ -1377,7 +1324,7 @@ class ListWidget(QListWidget):
                     return
             super(ListWidget, self).keyPressEvent(event)
         except exceptions:
-            NC(lvl=2,exc=sys.exc_info(),win=self.window().windowTitle(),func=str(self.objectName())+".(ListWidget).keyPressEvent",input=str(event))
+            Notification(lvl=2,exc=sys.exc_info(),win=self.window().windowTitle(),func=str(self.objectName())+".(ListWidget).keyPressEvent",input=str(event))
             super(ListWidget, self).keyPressEvent(event)
 
 class NotificationListWidget(ListWidget):
