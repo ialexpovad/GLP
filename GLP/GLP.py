@@ -21,9 +21,6 @@ from packaging.version import parse as versionParser
 import matplotlib
 import numpy
 
-
-
-
 # Importing PyQt mudules
 from PyQt5.QtWidgets import (QApplication, 
                                 QMainWindow, 
@@ -58,10 +55,10 @@ from PyQt5 import QtCore
 from PyQt5 import QtGui
 from PyQt5.QtGui import QTextCharFormat
 
-# Importing theme module
+# Importing module
 try:
-    from GLP import theme
-    from GLP import notify
+    import theme # from GLP
+    import notify
 except ModuleNotFoundError:
     import GLP
 
@@ -74,8 +71,7 @@ exceptions = (
                         NotImplementedError , 
                         Exception , 
                         RuntimeError , 
-                        ImportError
-                        )
+                        ImportError)
 
 def exception(exc = None, _exinf = True):
     '''
@@ -87,9 +83,9 @@ def exception(exc = None, _exinf = True):
     '''
     try:
         if False:
-            if exc == None:
-                exc = True
-            return Notification(_exc = exc) # TODO: add natification
+            if _exc == None:
+                _exc = True
+            return notify.Notify(exc = _exc) # TODO: add natification
         else:
             if exc == None:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -108,15 +104,347 @@ def exception(exc = None, _exinf = True):
         print("An exception occurred while trying to print an exception!")
         print(inst)
 
+def App() -> QApplication:
+    return QApplication.instance()
+
+class NotificationEvent(QtCore.QEvent):
+    EVENT_TYPE = QtCore.QEvent.Type(QtCore.QEvent.registerEventType())
+    def __init__(self, N):
+        QtCore.QEvent.__init__(self, NotificationEvent.EVENT_TYPE)
+        self.N = N
+
+class Notify():
+    '''
+    Basic Notify class of GLP. All notifications are saved and accesible through a notify window, which
+    opens by clicks on the notify button of any window. Notifications are used to interaction with the user
+    and can be used to handle exceptions because they provide a location for the entire error report.
+
+    Notification component (this module) can produce all information from exceptions. 
+    
+    Notify is flexiable. Fuul example:
+    Notify(1, "Error! Could not save file (picture)")
+    Notify(2, "Error! Could not save file (picture)")
+    Notify("Error! Could not save file (picture)")
+    Notify("Error! Could not save file (picture)", tracebak = True)
+    Notify("Error! Could not save file (picture)", exc = sys.exc_info()))
+
+    Levels:
+    -  0 = NULL
+    -  1 = Error
+    -  2 = Warning
+    -  3 = Notification
+    -  4 = Enhanced Mode Notification
+    -  5 = Direct Input Notification 
+
+    '''
+    def __init__(self, level = None, message = None , time = None, input = None, error = None, traceback = None, exc = None, wfunction = None, 
+    window = None, displayDirect = None, send = True):
+        self.initializeValues()
+        self._was_send = False
+        try:
+            self._time = datetime.datetime.now() if time == None else time
+            self.TimeStr = self._time.strftime('%H:%M:%S')
+            self._displayDirect = displayDirect
+            self._window = window
+            self._function = wfunction
+            self._input = input
+            if exc != None:
+                if exc == True:
+                    self.exc_type, self.exc_obj, self.exc_tb = sys.exc_info()
+                else:
+                    self.exc_type, self.exc_obj, self.exc_tb = exc
+                fileName = os.path.split(self.exc_tb.tb_frame.f_code.co_filename)[1]
+                if type(level) == str:
+                    self._level = 1
+                    self._message = level 
+                elif message == None and type(level) == tuple:
+                    self._level, self._message = level[0], level[1]
+                else:
+                    self._level = 1 if level == None else level
+                    self._message = str(message) if message != None else None
+                self._traceback = str(self.exc_type) +"  in " + str(fileName) +"  line " + str(self.exc_tb.tb_lineno)+"\n\n"+str(traceback.format_exc())
+                
+                print(self.TimeStr,":")
+                if len(str(self.exc_obj))<150:
+                    self._error = str(self.exc_type) + ": " + str(self.exc_obj)
+                    print(self.exc_type, " in", fileName, " line", self.exc_tb.tb_lineno,": ", self.exc_obj)
+                else:
+                    self._error = str(self.exc_type)
+                    self.ErrorLongDesc = str(self.exc_obj)
+                    print(self.exc_type, " in", fileName, " line", self.exc_tb.tb_lineno)
+            else:
+                if type(level)==str:
+                    self._level = 3
+                    self._message = level
+                elif message == None and type(level) == tuple:
+                    self._level, self._message = level[0], level[1]
+                else:
+                    self._level = 3 if level == None else level
+                    self._message = str(message) if message != None else None
+                self._error = error
+                if traceback == True:
+                    self._traceback = ""
+                    try:
+                        for i in traceback.format_stack()[0:-1]:
+                            self._traceback += str(i)
+                    except:
+                        self._traceback = str("Could not extract callstack")
+                else:
+                    self._traceback = traceback
+            self.GenerateLevelName()
+            if send == True:
+                self.send()
+        except Exception as ex:
+            self.initializeValues()
+            print(str(datetime.datetime.now().strftime('%H:%M:%S')),": An exception occurred while trying to create a notification")
+            print(ex)
+            self._time = datetime.datetime.now() if time == None else time
+            self.TimeStr = self._time.strftime('%H:%M:%S')
+            self._message = "An exception occurred while trying to create a notification"
+            self.exc_obj = ex
+            self._error = str(ex)
+            self.GenerateLevelName()
+            self.send(force = True) # Display Notification 
+
+    def initializeValues(self):
+        self.exc_type, self.exc_obj, self.exc_tb = None, None, None
+        self._time, self.TimeStr, self._error = None,None,None
+        self._window, self._traceback, self._function = None,None,None
+        self._level, self.Level, self._message = 1,"Notification level 1",None
+        self._input, self.ErrorLongDesc = None,None
+        self._displayDirect, self._ttstr = None,None
+        self.icon = QtGui.QIcon()
+        try:
+            self.Flash = App().NCF_NONE
+        except exceptions as ex:
+            print(ex)
+            self.Flash = None
+        
+        self._itemsDictionary = {   "Time:\n":              self.TimeStr,
+                                    "Level: ":              self.Level,
+                                    "Message:\n":           self._message,
+                                    "Error:\n":             self._error,
+                                    "Error Description:\n": self.ErrorLongDesc,
+                                    "Error Traceback:\n":   self._traceback,
+                                    "Function:\n":          self._function,
+                                    "Window:\n":            self._window,
+                                    "Input:\n":             self._input
+                                    }
+    
+    def GenerateLevelName(self):
+        """
+        Generates str(self.Level) from int(self.level)
+        -  0 = NULL
+        -  1 = Error
+        -  2 = Warning
+        -  3 = Notification
+        -  4 = Enhanced Mode Notification
+        -  5 = Direct Input Notification 
+        """
+        try:
+            if self._level == 0:
+                self.Level = str("None Notification")
+                self.icon = QtGui.QIcon()
+                self.Flash = QApplication.instance().NCF_NONE
+            elif self._level == 1:
+                self.Level = str("Error")
+                self.icon = QApplication.style().standardIcon(QStyle.SP_MessageBoxCritical)
+                self.Flash = QApplication.instance().NCF_r
+            elif self._level == 2:
+                self.Level = str("Warning")
+                self.icon = QApplication.style().standardIcon(QStyle.SP_MessageBoxWarning)
+                self.Flash = QApplication.instance().NCF_y
+            elif self._level == 3:
+                self.Level = str("Notification")
+                self.icon = QApplication.style().standardIcon(QStyle.SP_MessageBoxInformation)
+                self.Flash = QApplication.instance().NCF_b
+            elif self._level == 4:
+                self.Level = str("Enhanced Mode Notification")
+                self.icon = QApplication.style().standardIcon(QStyle.SP_MessageBoxInformation)
+                self.Flash = QApplication.instance().NCF_b
+            elif self._level == 10:
+                self.Level = str("Direct Input Notification") 
+                self.icon = QtGui.QIcon()
+                self.Flash = QApplication.instance().NCF_NONE
+            else:
+                self.Level = str("Notification level") + str(self.level)
+                self.Flash = QApplication.instance().NCF_b
+            return self.Level
+        except exceptions as ex:
+            print(ex)
+            return str("Could not generate Level Name")
+
+    def send(self, force = False):
+
+        """
+        Send = Display Notification. 
+        """ 
+
+    def items(self):
+        """
+        Metdod that return .iems of dictionary argument notification.
+        """
+        self._itemsDictionary = {   "Time:\n":                      self.TimeStr,
+                                    "Level:                         ":"({})\n{}".format(str(self._level),self.Level),
+                                    "Message:\n":                   self._message,
+                                    "Error:\n":                     self._error,
+                                    "Error Description:\n":         self.ErrorLongDesc,
+                                    "Error Traceback:\n":           self._traceback,
+                                    "Function:\n":                  self._function,
+                                    "Window:\n":                    self._window,
+                                    "Input:\n":                     self._input,
+                                    "Versions:\n":                  QApplication.instance().ModuleVersions
+                                    }
+
+        return self._itemsDictionary.items()            
+
+    def unpack(self):
+        return (self._level, str(self._message), self.TimeStr)
+
+
+
+    def lvl(self, level = None):
+        '''
+        Access to class argument Level.
+        
+        return: int(level)
+        An int can be given to change the level.
+        '''
+        if level != None:
+            self._level = level
+            self.GenerateLevelName()
+        return self._level
+
+    def msg(self, message = None): 
+        '''
+        Access to class argument Message.
+
+        return: str(Message)  \n
+        A str can be given to change the Message.
+        '''
+        
+        if message != None:
+            self._message = str(message)
+        if self._message == None and self._error != None:
+            return str(self._error)
+        else:
+            return str(self._message)
+
+    def time(self, time = None):
+        '''            
+        Access to class argument Time.
+
+        return: time as %H:%M:%S 
+        datetime.datetime.now() can be given to change the time
+        '''
+        if time != None:
+            self._time = time
+            self.TimeStr = self._time.strftime('%H:%M:%S')
+        return self.TimeStr 
+    def err(self, error = None, ErrorTraceback = None):
+        '''
+        Acces to class arguments Error and Traceback.
+        Traceback is a report containing the function calls made in code at a specific point i.e.
+
+        return: str(Error)
+        strings can be given to change the Error and ErrorTraceback
+        '''
+        if error != None:
+            self._error = str(error)
+        if ErrorTraceback != None:
+            self._traceback = str(ErrorTraceback)
+        return str(self._error)
+
+    def func(self, function = None):
+        '''
+        Acces to class argument Function.
+
+        return: str(Function)
+        A str can be given to change the Function
+        Function is the name of the function from which this notification originates
+
+        '''
+        if function != None:
+
+            self._function = str(function)
+        return str(self._function)
+
+    def inp(self, input=None):
+        '''
+        Acces to class argument Input.
+
+        return: str(Input)
+        A str can be given to change the Input  \n
+        Input is the (user-)input that caused this notification
+        '''
+        
+        if input != None:
+            self._input = str(input)
+        return str(self._input)
+
+    def win(self, window = None):
+        '''
+        Returns str(Window)  \n
+        A str can be given to change the Window  \n
+        Window is the name of the window from which this notification originates  
+        '''
+        if window != None:
+            self._window = str(window)
+        return str(self._window)
+
+        
+    def trb(self, traceback = None):
+        '''
+        Acces to class argument Traceback.
+
+        return: str(ErrorTraceback)
+        A str can be given to change the ErrorTraceback        
+        '''
+        if traceback != None:
+            self._traceback = str(traceback)
+        return str(self._traceback)
+
+    def dps(self, displayDirect = None):
+        '''
+        Acces to class argument _displayDirect (displayed directly in view string).
+
+        return: str(_displayDirect)
+        _displayDirect is the string that is intended to be displayed directly
+        A str can be given to change the _displayDirect
+        '''
+        if displayDirect != None:
+            self._displayDirect = str(displayDirect)
+        elif self._displayDirect == None:
+            if self._level == 10:
+                self._displayDirect = self.msg()
+            else:
+                self._displayDirect = self.Level + " at " + self.time()
+        return str(self._displayDirect)
+
+    def tts(self, ttstr = None):
+        '''
+        Acces to class arguments ttstr (the tool tip in view string).
+
+        return: str(TTStr)
+        TTStr is the string that is intended to be displayed as the tool tip   \n
+        A str can be given to change the TTStr
+        
+        '''
+        if ttstr != None:
+            self._ttstr = str(ttstr)
+        elif self._ttstr == None:
+            if self._level == 10:
+                self._ttstr = self.Level + " at " + self.time()
+            else:
+                self._ttstr = self.msg()
+        return str(self._ttstr)
+
 
 def advancedMode() -> bool:
     '''
     TODO: adding description
     '''
     return QApplication.instance().admode
-
-def App() -> QApplication:
-    return QApplication.instance()
 
 
 def cTimeFullStr(separator = None):
@@ -131,18 +459,11 @@ def cTimeFullStr(separator = None):
         TheFormat = separator.join(['%Y','%m','%d','%H','%M','%S'])
         return str(datetime.datetime.now().strftime(TheFormat))
 
-AltModifier = QtCore.Qt.AltModifier
-ControlModifier = QtCore.Qt.ControlModifier
-GroupSwitchModifier = QtCore.Qt.GroupSwitchModifier
-ShiftModifier = QtCore.Qt.ShiftModifier
-MetaModifier = QtCore.Qt.MetaModifier
-
-
 class GLPMainApp(QApplication):
     signalColourChanged = QtCore.pyqtSignal()
     signalAdvancedModeChanged = QtCore.pyqtSignal(bool)
     signalFontChanged = QtCore.pyqtSignal()
-
+    signalNewNotification = QtCore.pyqtSignal()
     def __init__(self, argv: typing.List[str]) -> None:
         super(GLPMainApp, self).__init__(argv)
         self.setOrganizationName = 'Alex Povod'
@@ -157,10 +478,9 @@ class GLPMainApp(QApplication):
         # TODO: check whether the advanced mode is active
         sys.excepthook = trap_exc_during_debug
 
-
         # Greeting user in Tab Widget 
         try:
-            message = "Welcome to " + getpass.getuser()
+            message = "Welcome " + getpass.getuser()
         except: # TODO: adding exception for no-user
             message = "Welcome"
         self.lastMessageText = message
@@ -191,7 +511,9 @@ class GLPMainApp(QApplication):
         # TODO: add advanced mode! (boolean)
 
         self.Notification_List = []
-
+        self.enableHotkeys = True
+        self._MakePath()
+        self._init_NCF()
 
     def setMainWindow(self, win):
         self.MainWindow = win
@@ -218,14 +540,16 @@ class GLPMainApp(QApplication):
                         screen.grabWindow(WID).save(Filename)
                         print(Filename)
                     except:
-                        notify.Notify(msg = "Could not save Screenshot", exc=sys.exc_info(), func = "GLPMainApp.eventFilter", input=Filename)
+                        Notify(message = "Could not save Screenshot", 
+                                        exc = sys.exc_info(), wfunction = "GLPMainApp.eventFilter", 
+                                        input = Filename)
                     else:
-                        notify.Notify(3,"Screenshot of currently active window saved as:\n" + Filename, func = "GLPMainApp.eventFilter", input=Filename)
+                        Notify(3,"Screenshot of currently active window saved as:\n" + Filename, wfunction = "GLPMainApp.eventFilter", input=Filename)
                 else:
                     print("Could not save Screenshot: Could not validate save location")
-                    notify.Notify(1, "Could not save Screenshot: Could not validate save location",func="GLPMainApp.eventFilter", input=self.GPath)
+                    Notify(1, "Could not save Screenshot: Could not validate save location", wfunction = "GLPMainApp.eventFilter", input = self.GPath)
                 return True
-            if event.modifiers() == ControlModifier:
+            if event.modifiers() == QtCore.Qt.ControlModifier:
                 if event.key() == QtCore.Qt.Key_0: # FEATURE: HelpWindow: Inform the User that this feature exists. Make Help window that is opened with F1
                     for w in self.topLevelWidgets():
                         if w.isVisible():
@@ -234,14 +558,14 @@ class GLPMainApp(QApplication):
                 if event.key() == QtCore.Qt.Key_T:
                     self.Show_exec_Window()
                     return True
-            if event.modifiers() == AltModifier:
+            if event.modifiers() == QtCore.Qt.AltModifier:
                 if event.key() == QtCore.Qt.Key_A:
                     self.ToggleAdvancedMode(not self.admode)
                     return True
                 elif event.key() == QtCore.Qt.Key_O:
                     self.Show_Options()
                     return True
-        elif event.type() == notify.NotificationEvent.EVENT_TYPE:
+        elif event.type() == NotificationEvent.EVENT_TYPE:
             self._NotifyUser(event.N)
             return True
         return super(GLPMainApp, self).eventFilter(source, event)
@@ -255,8 +579,8 @@ class GLPMainApp(QApplication):
                         i.AdvancedCB.setChecked(self.admode)
             self.signalAdvancedModeChanged.emit(self.admode)
         except:
-            notify.Notify(1,"Exception while toggling advanced mode",
-                            exc=sys.exc_info(),func="GLPMain.ToggleAdvancedMode",
+            Notify(level = 1, message = "Exception while toggling advanced mode",
+                            exc=sys.exc_info(),wfunction = "GLPMain.ToggleAdvancedMode",
                             input="{}: {}".format(str(type(checked)),str(checked)))
 
 
@@ -285,12 +609,12 @@ class GLPMainApp(QApplication):
             os.makedirs(self.ProgramFilesFolderPath,exist_ok = True)
             self.GPathOK = True
         except:
-            notify.Notify(1,"Could not create/validate GLP folder", exc=sys.exc_info())
+            Notify(level = 1, message = "Could not create/validate GLP folder", exc=sys.exc_info())
         try:
             # TODO: ...
             pass
         except:
-            notify.Notify(1,"Could not create/validate program specific folders", exc=sys.exc_info())
+            Notify(level = 1, message = "Could not create/validate program specific folders", exc=sys.exc_info())
 
     def setNotificationWindow(self):
         """
@@ -329,11 +653,23 @@ class GLPMainApp(QApplication):
 
 
     def initFont(self):
-        self.defFont = QtGui.QFont()
-        self.defFont.setFamily("Helvetica [Cronyx]")
-        self.defFont.setPointSize(9)
-        # self.defFont.setBold(True)
-        self.setFont(self.defFont)
+        self.FontFamily = "Helvetica"
+        font = QtGui.QFont()
+        font.setFamily("Helvetica")
+        font.setPointSize(10)
+        self.setFont(font)
+        self.colourSheme()
+
+        # Always keep Statusbar Font small
+        font = QtGui.QFont()
+        font.setFamily("Helvetica")
+        font.setPointSize(10)
+        for w in self.topLevelWidgets():
+            for i in w.findChildren(QStatusBar):
+                try:
+                    i.setFont(font)
+                except exceptions:
+                    exception(sys.exc_info())
     
     def colourSheme(self, colour = "Light"):
         '''
@@ -344,8 +680,11 @@ class GLPMainApp(QApplication):
             try:
                 importlib.reload(theme)
             except:
-                notify.Notify(2,"Could not reload theme",exc=sys.exc_info(),
-                    func="Main_App.Recolour",input=str(colour))
+                Notify(level = 2,
+                                message = "Could not reload theme",
+                                exc = sys.exc_info(),
+                                wfunction = "GLPMainApp.colourSheme",
+                                input = str(colour))
             try:    
                 spec = importlib.util.spec_from_file_location(  "CustomColourPalettes", 
                                                                 os.path.join(self.GPLSettingsPath,
@@ -354,8 +693,11 @@ class GLPMainApp(QApplication):
                 CustomColours = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(CustomColours)
             except:
-                notify.Notify(4,"Could not load custom colours",exc=sys.exc_info(),
-                    func="Main_App.Recolour",input=str(colour))
+                Notify(level = 4,
+                                message = "Could not load custom colours", 
+                                exc = sys.exc_info(), 
+                                wfunction = "GLPMainApp.colourSheme",
+                                input = str(colour))
             try:
                 self._reColourSheme(*theme.Colours[colour]())
             except:
@@ -399,7 +741,7 @@ class GLPMainApp(QApplication):
                 i.SetColour(self.BG_Colour, self.TextColour, self.mplCycler)
             
         # self.r_Recolour()
-        self.S_ColourChanged.emit()
+        self.signalColourChanged.emit()
     
     def SetFont(self, Family = None, PointSize = 0, source = None, emitSignal = True):
         if type(Family) == QtGui.QFont:
@@ -415,42 +757,42 @@ class GLPMainApp(QApplication):
             PointSize = int(PointSize)
         if PointSize < 5:
             try:
-                PointSize = source.TopBar.Font_Size_spinBox.value()
+                PointSize = source.customQTopBar.fontSpinBox.value()
             except exceptions:
                 try:
-                    notify.Notify(  msg = "Could not read Font_Size_spinBox.value()", 
+                    Notify(  message = "Could not read fontSpinBox.value()", 
                                     exc = sys.exc_info(),
-                                    func = "GLPMainApp.SetFont",
-                                    win = source.windowTitle())
+                                    wfunction = "GLPMainApp.SetFont",
+                                    window = source.windowTitle())
                 except exceptions:
-                    notify.Notify(  msg = "Could not read Font_Size_spinBox.value()",
-                                    exc=sys.exc_info(),
-                                    func="GLPMainApp.SetFont")
+                    Notify(  message = "Could not read fontSpinBox.value()",
+                                    exc = sys.exc_info(),
+                                    wfunction = "GLPMainApp.SetFont")
                 PointSize = 9
 
         if type(PointSize) != int:
             print(type(PointSize)," is an invalid type for font size (",PointSize,")")
             try:
-                notify.Notify(  msg="{} is an invalid type for font size ({})".format(str(type(PointSize)),str(PointSize)),
+                Notify(  msg="{} is an invalid type for font size ({})".format(str(type(PointSize)),str(PointSize)),
                                 exc = sys.exc_info(),
-                                func="GLPMainApp.SetFont",
-                                win = source.windowTitle())
+                                wfunction = "GLPMainApp.SetFont",
+                                window = source.windowTitle())
             except:
-                notify.Notify(  msg = "{} is an invalid type for font size ({})".format(str(type(PointSize)),str(PointSize)),
+                Notify(  message = "{} is an invalid type for font size ({})".format(str(type(PointSize)),str(PointSize)),
                                 exc=sys.exc_info(),
-                                func="GLPMainApp.SetFont")
+                                wfunction = "GLPMainApp.SetFont")
             PointSize = 9
                 
         for w in self.topLevelWidgets():
             for i in w.findChildren(QCustomTopBarWidget):
                 try:
-                    if i.IncludeFontSpinBox:
+                    if i._includeFontSpinBox:
                         # setValue emits ValueChanged and thus calls ChangeFontSize if the new Value is different from the old one.
                         # If the new Value is the same it is NOT emitted.
                         # To ensure that this behaves correctly either way the signals are blocked while changing the Value.
-                        i.Font_Size_spinBox.blockSignals(True)
-                        i.Font_Size_spinBox.setValue(PointSize)
-                        i.Font_Size_spinBox.blockSignals(False)
+                        i.fontSpinBox.blockSignals(True)
+                        i.fontSpinBox.setValue(PointSize)
+                        i.fontSpinBox.blockSignals(False)
                 except exceptions:
                     exception(sys.exc_info())
         
@@ -470,7 +812,7 @@ class GLPMainApp(QApplication):
         # Always keep Statusbar Font small
         font = QtGui.QFont()
         font.setFamily(Family)
-        font.setPointSize(9)
+        font.setPointSize(10)
         for w in self.topLevelWidgets():
             for i in w.findChildren(QStatusBar):
                 try:
@@ -481,6 +823,7 @@ class GLPMainApp(QApplication):
             self.signalFontChanged.emit()
 
     def _init_NCF(self): 
+        
         self.NCF_NONE = QtCore.QPropertyAnimation(self)
         
         self.NCF_r = QtCore.QPropertyAnimation(self,b'FLASH_colour')
@@ -642,7 +985,6 @@ class GLPWindow(QMainWindow):
         self._include_QTopBar = _include_QTopBar
         self.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
         
-    
         self.GPLWidget = customQFrameWidget(self)
         self.gridLayGPLWidget =  QGridLayout(self.GPLWidget)
         self.gridLayGPLWidget.setContentsMargins(0, 0, 0, 0)
@@ -727,7 +1069,37 @@ class GLPWindow(QMainWindow):
             self.GPLWidget.inFrame()
             self.customQTopBar.custMaxBtn.setText("□")
             super(GLPWindow, self).showNormal()
-
+    
+    
+    
+    def showMaximized(self):
+        self.setTopBarVisible(True)
+        self.GPLWidget.hideFrame()
+        self.customQTopBar.custMaxBtn.setText("□")
+        super(GLPWindow, self).showMaximized()
+    
+    def showFullScreen(self):
+        if self._fullScreen_HideBars:
+            self.setTopBarVisible(False)
+        else:
+            self.setTopBarVisible(True)
+        self.GPLWidget.hideFrame()
+        self.customQTopBar.custMaxBtn.setText("□")
+        super(GLPWindow, self).showFullScreen()
+        
+    def restoreState(self,state,version=0):
+        self.setTopBarVisible(True)
+        super(GLPWindow, self).restoreState(state,version)
+        QApplication.instance().processEvents()
+        if self.isFullScreen() or self.isMaximized():
+            self.GPLWidget.hideFrame()
+            self.customQTopBar.custMaxBtn.setText("□")
+        else:
+            self.GPLWidget.inFrame()
+            self.customQTopBar.custMaxBtn.setText("□")
+        if self.isFullScreen() and self._fullScreen_HideBars:
+            self.setTopBarVisible(False)
+            
     def setMenuBar(self, menubar):
         if menubar == None:
             try:
@@ -825,6 +1197,46 @@ class GLPWindow(QMainWindow):
                 self.customQStatusBar.setVisible(b)
             except:
                 pass
+    
+
+    def eventFilter(self, source, event):
+        if event.type() == 6 and App().enableHotkeys: # QtCore.QEvent.KeyPress
+            if event.modifiers() == QtCore.Qt.AltModifier:
+                if event.key() == QtCore.Qt.Key_T and source is self: # Alt+T to toggle on top
+                    if not self.OnTop:
+                        print("Try OnTop")
+                        self.OnTop = True
+                        self.setWindowFlag(QtCore.Qt.X11BypassWindowManagerHint,True)
+                        self.setWindowFlag(QtCore.Qt.BypassWindowManagerHint,True)
+                        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint,True)
+                        QApplication.instance().processEvents()
+                        self.show()
+                    else:
+                        print("No longer OnTop")
+                        self.OnTop = False
+                        self.setWindowFlag(QtCore.Qt.X11BypassWindowManagerHint,False)
+                        self.setWindowFlag(QtCore.Qt.BypassWindowManagerHint,False)
+                        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint,False)
+                        QApplication.instance().processEvents()
+                        self.show()
+            else:
+                if event.key() == QtCore.Qt.Key_F11 and source is self: # F11 to toggle Fullscreen
+                    if not self.isFullScreen():
+                        if self.isMaximized():
+                            self.LastOpenState = self.showMaximized
+                            self.customQTopBar.custMaxBtn.setText("□")
+                        else:
+                            self.LastOpenState = self.showNormal
+                            self.customQTopBar.custMaxBtn.setText("□")
+                        self.showFullScreen()
+                    else:
+                        if self.LastOpenState == self.showMaximized:
+                            self.customQTopBar.custMaxBtn.setText("□")
+                        else:
+                            self.customQTopBar.custMaxBtn.setText("□")
+                        self.LastOpenState()
+        return super(GLPWindow, self).eventFilter(source, event) # let the normal eventFilter handle the event
+
 
 class QCustomMenuBar(QMenuBar):
     '''
@@ -922,9 +1334,9 @@ class QCustomMenuBar(QMenuBar):
                     frameGm.moveBottomLeft(screen.bottomLeft())
                     self.window().move(frameGm.topLeft())
             except exceptions:
-                notify.Notify( exc=sys.exc_info(),
-                    win = self.window().windowTitle(),
-                    func = "QCustomMenuBar.mouseReleaseEvent")
+                Notify( exc=sys.exc_info(),
+                    window = self.window().windowTitle(),
+                    wfunction = "QCustomMenuBar.mouseReleaseEvent")
         else:
             self.moving = False
             super(QCustomMenuBar, self).mouseReleaseEvent(event)
@@ -969,7 +1381,7 @@ class QCustomTopBarWidget(QWidget):
     '''
     Custom top bar.
     '''
-    def __init__(   self, parent= None, doInitialize =  False, _includeMenu = False, _includeFontSpinBox = False, _includeErrorButton = False,  _includeAdCB = False
+    def __init__(   self, parent = None, doInitialize =  False, _includeMenu = False, _includeFontSpinBox = True, _includeErrorButton = False,  _includeAdCB = False
                 ) -> None:
 
         super(QCustomTopBarWidget, self).__init__(parent)
@@ -1018,7 +1430,7 @@ class QCustomTopBarWidget(QWidget):
                                     QtCore.Qt.AlignRight
                                     )
 
-        self.custCloseBtn.setFont( QtGui.QFont("Arial", weight = QtGui.QFont.Bold))
+        self.custCloseBtn.setFont( QtGui.QFont("Helvetica", weight = QtGui.QFont.Bold))
         self.custCloseBtn.setText("x")
         self.custCloseBtn.setToolTip("End the session")
 
@@ -1031,26 +1443,6 @@ class QCustomTopBarWidget(QWidget):
         darkRedBrush.setStyle(QtCore.Qt.SolidPattern)
         self.RedHighlightPalette.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkRedBrush)
 
-        
-        self.BlueHighLightPallete = QtGui.QPalette()
-        darkBlueBrush = QtGui.QBrush(QtGui.QColor(0,0,139))
-        darkBlueBrush.setStyle(QtCore.Qt.SolidPattern)
-        self.BlueHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkBlueBrush)
-        darkBlueBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        darkBlueBrush.setStyle(QtCore.Qt.SolidPattern)
-        self.BlueHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkBlueBrush)
-
-        self.GreenHighLightPallete = QtGui.QPalette()
-        darkGreenBrush = QtGui.QBrush(QtGui.QColor(21,71,52))
-        darkGreenBrush.setStyle(QtCore.Qt.SolidPattern)
-        self.GreenHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkGreenBrush)
-        darkGreenBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        darkGreenBrush.setStyle(QtCore.Qt.SolidPattern)
-        self.GreenHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkGreenBrush)
-
-        
-
-        
         self.custCloseBtn.installEventFilter(self)
         self.custCloseBtn.setAutoRaise(True)
         
@@ -1074,6 +1466,15 @@ class QCustomTopBarWidget(QWidget):
                                     )
         self.custMaxBtn.setFont( QtGui.QFont("Arial",weight=QtGui.QFont.Bold))
         self.custMaxBtn.setText(u"□") # TODO:add picture 
+        
+        self.BlueHighLightPallete = QtGui.QPalette()
+        darkBlueBrush = QtGui.QBrush(QtGui.QColor(0,0,139))
+        darkBlueBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.BlueHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkBlueBrush)
+        darkBlueBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        darkBlueBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.BlueHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkBlueBrush)
+
         self.custMaxBtn.clicked.connect(self._toggleMaximized)
         # endregion
 
@@ -1090,6 +1491,15 @@ class QCustomTopBarWidget(QWidget):
                                     )
         self.custMinBtn.setFont( QtGui.QFont("Arial",weight=QtGui.QFont.Bold))
         self.custMinBtn.setText("_") # TODO:add picture 
+        self.GreenHighLightPallete = QtGui.QPalette()
+        darkGreenBrush = QtGui.QBrush(QtGui.QColor(21,71,52))
+        darkGreenBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.GreenHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.Button, darkGreenBrush)
+        darkGreenBrush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        darkGreenBrush.setStyle(QtCore.Qt.SolidPattern)
+        self.GreenHighLightPallete.setBrush(QtGui.QPalette.All, QtGui.QPalette.ButtonText, darkGreenBrush)
+
+        
         self.custMinBtn.clicked.connect(self._toggleMinimized)
         # endregion
          
@@ -1237,29 +1647,8 @@ class QCustomTopBarWidget(QWidget):
         except exceptions:
             exception(sys.exc_info())
 
-    def eventFilter(self, source, event):
-        if event.type() == 10 or event.type() == 11:
-            if source == self.custCloseBtn:
-                if event.type() == QtCore.QEvent.Enter:#HoverMove
-                    self.custCloseBtn.setPalette(self.RedHighlightPalette)
-                elif event.type() == QtCore.QEvent.Leave:#HoverLeave
-                    self.custCloseBtn.setPalette(self.palette())
-            elif source == self.custMaxBtn:
-                if event.type() == QtCore.QEvent.Enter:
-                    self.custMaxBtn.setAutoRaise(False)
-                elif event.type() == QtCore.QEvent.Leave:
-                    self.custMaxBtn.setAutoRaise(True)
-            elif source == self.custMinBtn:
-                if event.type() == QtCore.QEvent.Enter:
-                    self.custMinBtn.setAutoRaise(False)
-                elif event.type() == QtCore.QEvent.Leave:
-                    self.custMinBtn.setAutoRaise(True)
-        elif self._includeErrorButton and source is self.error_notification and event.type() == QtCore.QEvent.Enter: #==10
-            QToolTip.showText(QtGui.QCursor.pos(),self.error_notification.toolTip(),self.error_notification)
-        return super(QCustomTopBarWidget, self).eventFilter(source, event)
-
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
-        if a0.button() == QtCore.Qt.LeftButton:
+        if a0.button() == QtCore.Qt.LeftButton: 
             self.setCursor(QtGui.QCursor(QtCore.Qt.ClosedHandCursor))
             self.moveHand.setCursor(QtGui.QCursor(QtCore.Qt.ClosedHandCursor))
             self.moving = True; self.offset = a0.globalPos() - self.window().geometry().topLeft()
@@ -1372,7 +1761,22 @@ class customQFrameWidget(QFrame):
         self.enabledFrame = False
         # TODO: resizable and movable main window without title bar
 
+        self.FrameEnabled = False
+        self.moving = False
+        self.setMouseTracking(True)
 
+        self.offset = 0
+        self.mPos = None# For dragging, relative mouse position to upper left
+        self.global_mPos = None # For resizing, global mouse position at mouse click
+        self.rs_mPos = None # for resizing
+        self.storeWidth = 0 # fix window size at mouseclick for resizing
+        self.storeHeight = 0
+        self.adjXFac = 0
+        self.adjYFac = 0
+        self.transXFac = 0
+        self.transYFac = 0
+        self.Direction = "D"
+    
 
     def inFrame(self):
         '''
@@ -1398,10 +1802,10 @@ class windowNotification(GLPWindow):
     '''
     Class is window that lists all notifications and displays their details.
     '''
-    def __init__(self, parent: typing.Optional[QWidget] = None, flags: typing.Union[QtCore.Qt.WindowFlags, QtCore.Qt.WindowType] = None) -> None:
+    def __init__(self, parent = None) -> None:
         try:    
             super(windowNotification, self).__init__(parent)
-            self.setWindowTitle("windowNotification")
+            self.setWindowTitle("Notifications")
             self.standardSize = (600, 300)
             self.resize(*self.standardSize)
             self.setWindowIcon(QApplication.style().standardIcon(QStyle.SP_MessageBoxInformation))
@@ -1428,7 +1832,7 @@ class NotificationsWidget(QSplitter):
     This widget displays all notifications and allows (read)access to their details. \n
     All previous notifications are automatically loaded and all new notifications are automatically added
     """
-    def __init__(self, parent=None):
+    def __init__(self, parent = None):
         super(NotificationsWidget, self).__init__(parent)
         #sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         #sizePolicy.setHorizontalStretch(0)
@@ -1441,7 +1845,7 @@ class NotificationsWidget(QSplitter):
         self.NotificationList.setObjectName("NotificationList")
         self.NotificationInfo.setObjectName("NotificationInfo")
         
-        App().S_New_Notification.connect(self.AddNotification)
+        App().signalNewNotification.connect(self.AddNotification)
         for i in App().Notification_List:
             self.AddNotification(i)
         
@@ -1461,14 +1865,16 @@ class NotificationsWidget(QSplitter):
             text = "Could not add notification: "+Error
             item = QListWidgetItem()
             item.setText(text)
-            item.setData(100, Notification(1,"Could not add notification",err=Error,func=str(self.objectName())+".(NotificationsWidget).AddNotification",win=self.window().windowTitle()))
-            
+            item.setData(100, 
+                            Notify(level = 1, message = "Could not add notification",
+                                            error = Error, wfunction = str(self.objectName()) + ".(NotificationsWidget).AddNotification", 
+                                            window = self.window().windowTitle()))
             self.NotificationList.addItem(item)
             self.NotificationList.scrollToBottom()
 
 class ListWidget(QListWidget):
     """
-    The base class for list widgets of GLP. \n
+    The base class for list widgets of GLP.
     QtGui.QKeySequence.Copy has been reimplemented to allow copying of multiple items. (Text of items is separated by linebreaks.) \n
     The scrollmode is set to ScrollPerPixel and the selectionmode is set to ExtendedSelection.
     """
@@ -1493,7 +1899,11 @@ class ListWidget(QListWidget):
                     return
             super(ListWidget, self).keyPressEvent(event)
         except exceptions:
-            notify.Notify(lvl=2,exc=sys.exc_info(),win=self.window().windowTitle(),func=str(self.objectName())+".(ListWidget).keyPressEvent",input=str(event))
+            Notify(lvl=2,
+                            exc=sys.exc_info(),
+                            window = self.window().windowTitle(),
+                            wfunction = str(self.objectName())+".(ListWidget).keyPressEvent",
+                            input = str(event))
             super(ListWidget, self).keyPressEvent(event)
 
 class NotificationListWidget(ListWidget):
@@ -1518,10 +1928,52 @@ class NotificationInfoWidget(ListWidget): #TODO: Add a button to copy the detail
         item.setText("For more information select a notification")
         self.addItem(item)
 
+    def keyPressEvent(self,event):
+        try:
+            if event == QtGui.QKeySequence.Copy:
+                SelectedItems = self.selectedItems()
+                if len(SelectedItems) > 1:
+                    string = ""
+                    for i in SelectedItems:
+                        string += i.text()
+                        string += "\n\n"
+                    Qt.QApplication.clipboard().setText(string)
+                    event.accept()
+                    return
+            super(NotificationInfoWidget, self).keyPressEvent(event)
+        except exceptions:
+            Notify(lvl = 2,
+                            exc=sys.exc_info(),
+                            window = self.window().windowTitle(),
+                            wfunction = str(self.objectName())+".(NotificationInfoWidget).keyPressEvent",
+                            input=str(event))
+            super(NotificationInfoWidget, self).keyPressEvent(event)
 
+    def ShowNotificationDetails(self,Notification):
+        try:
+            Notification = Notification.data(100)
+            self.clear()
+            for k,v in Notification.items():
+                try:
+                    if v != None:
+                        item = QListWidgetItem()
+                        item.setText(k+str(v))
+                        self.addItem(item)
+                except exceptions:
+                    Notify(message = "Could not display{}".format(str(k)),
+                                    exc = sys.exc_info(),
+                                    window = self.window().windowTitle(),
+                                    wfunction = str(self.objectName())+".(NotificationInfoWidget).ShowNotificationDetails")    
+        except exceptions:
+            Notify(exc = sys.exc_info(), 
+                            window = self.window().windowTitle(), 
+                                wfunction = str(self.objectName())+".(NotificationInfoWidget).ShowNotificationDetails")
+    
 def trap_exc_during_debug(*args):
     # when app raises uncaught exception, send info
-    notify.Notify(1,"An unhandled exception occurred in a QThread!!!", err=str(args))
+    Notify(level = 1,
+                    message = "An unhandled exception occurred in a QThread!!!", 
+                    error = str(args))
 
 
 class GLPTextEdit(QTextEdit):
@@ -1540,7 +1992,7 @@ class GLPTextEdit(QTextEdit):
                 source.returnCtrlPressed.emit()
             if event.key() == QtCore.Qt.Key_Up and source.textCursor().blockNumber() == 0: # Move to beginning if up key pressed and in first line
                 cursor = source.textCursor()
-                if event.modifiers() == QtCore.Qt.ShiftModifier: # If shift is pressed select the text
+                if event.modifiers() == QtCore.Qt.ShiftModifier: # # If shift is pressed select the text
                     cursor.movePosition(cursor.Start,1)
                 else:
                     cursor.movePosition(cursor.Start)
@@ -1610,12 +2062,10 @@ class exec_Window(GLPWindow):
     def __init__(self,parent = None):
         try:
             super(exec_Window, self).__init__(parent, initTopBar = False)
-            self._topBar.initialize(    IncludeFontSpinBox  = True,
-                                        IncludeErrorButton  = True,
-                                        IncludeAdvancedCB   = True)
+            self.customQTopBar.initialize(_includeFontSpinBox = True, _includeErrorButton = True, _includeAdCB = True)
 
             self.setWindowTitle("Code Execution Window")
-            self.standardSize = (900, 500)
+            self.standardSize = (700, 300)
             self.resize(*self.standardSize)
             self.setWindowIcon(QApplication.style().standardIcon(QStyle.SP_ComputerIcon))
                 
@@ -1628,7 +2078,7 @@ class exec_Window(GLPWindow):
             self.Input_Field = TextEdit(self)
             self.Input_Field.setObjectName("Input_Field")
             self.Input_Field.setTabChangesFocus(False)
-            self.Input_Field.setText("# If you have Spyder installed use this to activate the 'Spyder/Dark' syntax highlighter:\nself.highlight()")
+            # self.Input_Field.setText("# If you have Spyder installed use this to activate the 'Spyder/Dark' syntax highlighter:\nself.highlight()")
             
             self.gridLayout.addWidget(self.Input_Field, 0, 0, 0, 0)
             self.gridLayout.setContentsMargins(0,0,0,0)
@@ -1638,7 +2088,9 @@ class exec_Window(GLPWindow):
             
             self.setAutoFillBackground(True)
         except exceptions:
-            notify.Notify(exc=sys.exc_info(),win=self.windowTitle(),func="exec_Window.__init__")
+            Notify(exc = sys.exc_info(),
+                            window = self.windowTitle(),
+                            wfunction = "exec_Window.__init__")
 
     def execute_code(self):
         input_text = self.Input_Field.toPlainText()
@@ -1648,7 +2100,10 @@ class exec_Window(GLPWindow):
             window = QApplication.instance().MainWindow # pylint: disable=unused-variable
             exec(input_text)
         except exceptions:
-            notify.Notify(exc=sys.exc_info(),win=self.windowTitle(),func="exec_Window.execute_code",input=input_text)
+            Notify(exc = sys.exc_info(),
+                            window = self.windowTitle(),
+                            wfunction="exec_Window.execute_code", 
+                            input = input_text)
 
     def highlight(self):
         try:
@@ -1684,9 +2139,9 @@ class Options_Window(GLPWindow):
             
             self.setAutoFillBackground(True)
         except exceptions:
-            notify.Notify(  exc = sys.exc_info(), 
-                            win=self.windowTitle(),
-                            func="exec_Window.__init__")
+            Notify(  exc = sys.exc_info(), 
+                            win = self.windowTitle(),
+                            wfunction = "Options_Window.__init__")
 
 
 class ColourPicker(QToolButton):
@@ -1875,7 +2330,7 @@ class OptionsWidget_1_Appearance(QWidget):
             y+=1
         
     def SetFontFamily(self,Family):
-        QApplication.instance().SetFont(Family,self.window().TopBar.Font_Size_spinBox.value(),self)
+        QApplication.instance().SetFont(Family,self.window().customQTopBar.fontSpinBox.value(),self)
         
     def LoadCurrentPalette(self):
         for i in self.PaletteColours+self.PenColours+self.NotificationColours+self.MiscColours:
@@ -1890,7 +2345,9 @@ class OptionsWidget_1_Appearance(QWidget):
             try:
                 importlib.reload(theme)
             except:
-                notify.Notify(2,"Could not reload theme",exc=sys.exc_info(),func="GLPMainApp.colourSheme")
+                Notify(2,"Could not reload theme",
+                                exc=sys.exc_info(),
+                                wfunction = "GLPMainApp.colourSheme")
             try:
                 if QApplication.instance().GPathOK:
                     spec = importlib.util.spec_from_file_location("CustomColourPalettes", os.path.join(QApplication.instance().GSettingsPath,"CustomColourPalettes.py"))
@@ -1900,7 +2357,10 @@ class OptionsWidget_1_Appearance(QWidget):
                 else:
                     raise Exception("GPath is not OK")
             except:
-                notify.Notify(4,"Could not load custom colours",exc=sys.exc_info(),func="GLPMainApp.colourSheme")
+                Notify(level = 4, 
+                                message = "Could not load custom colours",
+                                    exc=sys.exc_info(),
+                                    wfunction = "GLPMainApp.colourSheme")
             try:
                 for i in theme.Colours.keys():
                     ColourList.append(i)
@@ -1909,7 +2369,9 @@ class OptionsWidget_1_Appearance(QWidget):
             except:
                 pass
         except:
-            notify.Notify(1,"Exception while loading colour palette",exc=sys.exc_info(),func="GLPMainApp.colourSheme")
+            Notify(1,"Exception while loading colour palette", 
+                            exc = sys.exc_info(),
+                            wfunction = "GLPMainApp.colourSheme")
         return ColourList
         
     def MakePalette(self):
@@ -1947,7 +2409,7 @@ class OptionsWidget_1_Appearance(QWidget):
     def PaletteToPython(self,Palette,FunctionName,Name):
         #window.AMaDiA_About_Window_Window.TextBrowser.setText(app.optionWindow.ColourPicker.PaletteToPython(AGeColour.Colours[app.optionWindow.ColourPicker.LoadPaletteList()[0]],app.optionWindow.ColourPicker.LoadPaletteList()[0])[0])
         Palette1, Palette2, Palette3, _PenColours, _NotificationColours, _MiscColours = Palette()
-        PenColours, NotificationColours, MiscColours = ColourDict(),ColourDict(),ColourDict()
+        PenColours, NotificationColours, MiscColours = colourDict(),colourDict(),colourDict()
         PenColours.copyFromDict(_PenColours)
         NotificationColours.copyFromDict(_NotificationColours)
         MiscColours.copyFromDict(_MiscColours)
@@ -1984,7 +2446,8 @@ class OptionsWidget_1_Appearance(QWidget):
             Name = QInputDialog.getText(self,"Palette Name","What should the palette be called?")[0].strip()
             # VALIDATE: Ensure that the names can not break the dictionary
             if Name == None or Name == "":
-                notify.Notify(2,"SavePalette has been cancelled")
+                Notify(level = 2,
+                                message = "SavePalette has been cancelled")
                 return ""
         Text = "from PyQt5 import QtCore, QtGui\n\ndef NewColour():\n    palette1 = QtGui.QPalette()\n    palette2 = QtGui.QPalette()\n    palette3 = QtGui.QPalette()"
         for i in self.PaletteColours:
@@ -2031,7 +2494,9 @@ class OptionsWidget_1_Appearance(QWidget):
                     TheDict[n.replace("\\","\\\\").replace("\"","\\\"")] = fn
                     i+=1
             except:
-                notify.Notify(2,"Could not load custom colours",exc=sys.exc_info(),func="Main_App.Recolour")
+                Notify(level = 2, 
+                                message = "Could not load custom colours", 
+                                exc=sys.exc_info(), wfunction = "GLPMainApp.colourSheme")
                 msgBox = QMessageBox(self)
                 msgBox.setText("Could not load previous custom colours!")
                 msgBox.setInformativeText("Do you want to save the colour anyways?\nWARNING: This will overwrite any previous colour palettes!!!")
@@ -2050,9 +2515,32 @@ class OptionsWidget_1_Appearance(QWidget):
             with open(FileName,'w',encoding="utf-8") as text_file:
                 text_file.write(fText)
         except:
-            notify.Notify(1,"Could not save",exc=sys.exc_info())
+            Notify(level = 1,
+                            message = "Could not save", 
+                            exc = sys.exc_info())
         self.ColourList.blockSignals(True)
         self.ColourList.clear()
         self.ColourList.addItems(self.LoadPaletteList())
         self.ColourList.blockSignals(False)
         return Text
+
+class glp_test_start(GLPWindow):
+    def __init__(self, m_mainApp, parent = None):
+        super(glp_test_start, self).__init__(parent, _init_QTopBar = True)        
+        self.customQTopBar.initialize(_includeFontSpinBox = True, _includeErrorButton = True)
+        self.m_mainApp = m_mainApp
+        self.m_mainApp.setMainWindow(self)
+        self.standardSize = (906, 634)
+        self.resize(*self.standardSize)
+        self.setWindowTitle("GLP Test Window")
+        self.setWindowIcon(QApplication.style().standardIcon(QStyle.SP_CommandLink))
+
+if __name__ == '__main__':
+    print("Test Window Startup")
+    app = GLPMainApp([])
+    app.setStyle("Fusion")
+    window = glp_test_start(app)
+    app.setMainWindow(window) 
+    print(datetime.datetime.now().strftime('%H:%M:%S:'),"Test Window Started\n")
+    window.show()
+    sys.exit(app.exec())
